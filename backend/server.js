@@ -13,7 +13,7 @@ app.use(
   cors({
     origin: ["http://localhost:3000"],
     methods: ["POST", "GET", "PUT"],
-    Credential: true,
+    credentials: true,
   })
 );
 app.use(cookieParser());
@@ -116,11 +116,11 @@ app.delete("/delete/:id", (req, res) => {
 });
 
 const verifyUser = (req, res, next) => {
-  const token = req.cookie.token;
+  const token = req.cookies.token;
   if (!token) {
     return res.json({ Error: "You are not authendicated" });
   } else {
-    jwt.verify(token, "jwt-secreat-key", (err, decode) => {
+    jwt.verify(token, "jwt-secreat-key", (err, decoded) => {
       if (err) return res.json({ Error: "Error Token" });
       next();
     });
@@ -139,9 +139,9 @@ app.post("/login", (req, res) => {
     if (err)
       return res.json({ status: "error", Error: "error in runnign query" });
     if (data.length > 0) {
-      //   const id = data[0].id;
-      //   const token = jwt.sign({ id }, "jwt-secret-key", { expiresIn: "id" });
-      //   res.cookie("token", token);
+      const id = data[0].id;
+      const token = jwt.sign({ id }, "jwt-secret-key", { expiresIn: "1d" });
+      res.cookie("token", token);
       return res.json({ Status: "Success" });
     } else {
       return res.json({ status: "error", Error: "worng email or password" });
