@@ -6,13 +6,14 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
+import { decode } from "punycode";
 
 const app = express();
 
 app.use(
   cors({
     origin: ["http://localhost:3000"],
-    methods: ["POST", "GET", "PUT"],
+    methods: ["POST", "GET", "PUT", "DELETE"],
     credentials: true,
   })
 );
@@ -54,18 +55,18 @@ app.get("/getemployee", (req, res) => {
   const sql = "SELECT * FROM employee";
   db.query(sql, (err, data) => {
     if (err) return res.json({ Error: "getemployee error in sql table" });
-    return res.json({ status: "success", Result: data });
+    return res.json({ Status: "Success", Result: data });
   });
 });
 
 // Read the Table values
 
 app.get("/read/:id", (req, res) => {
-  const sql = "SELECT * FROM employee WHERE `id`=?";
+  const sql = "SELECT * FROM employee WHERE id = ?";
   const id = req.params.id;
   db.query(sql, [id], (err, data) => {
-    if (err) return res.json("error");
-    return res.json(data);
+    if (err) return res.json({ Error: "Get employee error in sql" });
+    return res.json({ Status: "Success", Result: data });
   });
 });
 
@@ -108,9 +109,33 @@ app.post("/create", upload.single("image"), (req, res) => {
 
 app.delete("/delete/:id", (req, res) => {
   const id = req.params.id;
-  const sql = "DELETE FROM `employee` WHERE `id` = ?";
+  const sql = "DELETE FROM employee WHERE id = ?";
   db.query(sql, [id], (err, data) => {
     if (err) return res.json("sql error");
+    return res.json(data);
+  });
+});
+
+app.get("/admincount", (req, res) => {
+  const sql = "Select count(id) as admin from login";
+  db.query(sql, (err, data) => {
+    if (err) return res.json({ Error: "error in runnign sql query" });
+    return res.json(data);
+  });
+});
+
+app.get("/employeeCount", (req, res) => {
+  const sql = "Select count(id) as employee from employee";
+  db.query(sql, (err, data) => {
+    if (err) return res.json({ Error: "error in runnign sql query" });
+    return res.json(data);
+  });
+});
+
+app.get("/salary", (req, res) => {
+  const sql = "Select sum(salary) as sumOfSalary from employee";
+  db.query(sql, (err, data) => {
+    if (err) return res.json({ Error: "error in runnign sql query" });
     return res.json(data);
   });
 });
@@ -120,15 +145,17 @@ const verifyUser = (req, res, next) => {
   if (!token) {
     return res.json({ Error: "You are not authendicated" });
   } else {
-    jwt.verify(token, "jwt-secreat-key", (err, decoded) => {
+    jwt.verify(token, "jwt-secret-key", (err, decoded) => {
       if (err) return res.json({ Error: "Error Token" });
+      req.role = decoded.role;
+      req.id = decoded.id;
       next();
     });
   }
 };
 
 app.get("/dashboard", verifyUser, (req, res) => {
-  return res.json({ Status: "Success" });
+  return res.json({ Status: "Success", role: req.role, id: req.id });
 });
 
 app.post("/login", (req, res) => {
@@ -140,13 +167,58 @@ app.post("/login", (req, res) => {
       return res.json({ status: "error", Error: "error in runnign query" });
     if (data.length > 0) {
       const id = data[0].id;
-      const token = jwt.sign({ id }, "jwt-secret-key", { expiresIn: "1d" });
+      const token = jwt.sign({ role: "admin" }, "jwt-secret-key", {
+        expiresIn: "1d",
+      });
       res.cookie("token", token);
       return res.json({ Status: "Success" });
     } else {
       return res.json({ status: "error", Error: "worng email or password" });
     }
   });
+});
+
+app.post("/employeelogin", (req, res) => {
+  const sql = "SELECT * FROM employee Where email = ?";
+
+  db.query(sql, [req.body.email], (err, data) => {
+    if (err)
+      return res.json({ Status: "error", Error: "error in runnign query" });
+    if (data.length > 0) {
+      bcrypt.compare(
+        req.body.password.toString(),
+        data[0].password,
+        (err, response) => {
+          if (err) return res.json({ Error: "password error" });
+          const token = jwt.sign(
+            { role: "employee", id: data[0].id },
+            "jwt-secret-key",
+            {
+              expiresIn: "1d",
+            }
+          );
+          res.cookie("token", token);
+          return res.json({ Status: "Success", id: data[0].id });
+        }
+      );
+    } else {
+      return res.json({ status: "error", Error: "worng email or password" });
+    }
+  });
+});
+
+app.get("/employee/:id", (req, res) => {
+  const sql = "SELECT * FROM employee WHERE `id`=?";
+  const id = req.params.id;
+  db.query(sql, [id], (err, data) => {
+    if (err) return res.json("error");
+    return res.json(data);
+  });
+});
+
+app.get("/logout", (req, res) => {
+  res.clearCookie("token");
+  return res.json({ Status: "Success" });
 });
 
 app.listen(8081, () => {
